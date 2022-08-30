@@ -1,0 +1,63 @@
+## copyrights(c) Francesco Gualdrini
+
+## This tool merge sequencing lanes by projects - Also re-run based on a csv table
+## Run the scripot from the experiment forlder you want to store the data
+##
+## The pipe will create a Merged folder contatining the fq based on the csv you provide:
+## As it stand the tool will merge based on the SID and therefore re-runs are going to be merged
+## In the future we can add functionality to this pipe.
+
+
+args = commandArgs(trailingOnly=TRUE)
+if (length(args)!=2) {
+  stop("Place the .csv file with the required filed (SID, RID, Name of the Run and Name of the samples) in the folder you are running the script\n
+  	ARG1 = Provide the .csv file.\n
+  	ARG2 = Provide the output folder\n", call.=FALSE)
+} else if (length(args)==2) {
+	MASTER_FILE <- read.delim(args[[1]],sep="\t")
+	Output_folder <- as.character(args[[2]])
+}
+
+dir.create(Output_folder,recursive=TRUE)
+setwd(Output_folder)
+dir.create("./Merged_Fastq")
+
+# in run folder specify user!! 
+
+MASTER_FILE$FASTQ_FOLDER_RID <- paste0(MASTER_FILE$FASTQ_FOLDER,"/",MASTER_FILE$RID)
+Unique_SIDs <- as.character(unique(MASTER_FILE$SID))
+MASTER_FILE$SHORT_NAME <- gsub(" ","",MASTER_FILE$SHORT_NAME)
+MASTER_FILE$SHORT_NAME <- paste0(MASTER_FILE$SHORT_NAME,"_",gsub(" ","",MASTER_FILE$REPLICATE))
+
+Zcat_command_1 <- " | grep -A 3 '^@.*' $fastq | grep -v -- '^--$' | sed 's/ /_/g' | awk '/^@/ {gsub(/_1/,\"\",$0)} 1' > "
+Zcat_command_2 <- " | grep -A 3 '^@.*' $fastq | grep -v -- '^--$' | sed 's/ /_/g' | awk '/^@/ {gsub(/_2/,\"\",$0)} 1' > "
+i <- 0
+
+for(f in Unique_SIDs){
+	i <- i+1
+	FOLDER <- paste0(Output_folder,"/Merged_Fastq/")
+	cat("Merging SID:",f," Name:",as.character(unique(MASTER_FILE$SHORT_NAME[MASTER_FILE$SID==f])),"\n")
+	RID <- as.character(MASTER_FILE$FASTQ_FOLDER_RID[MASTER_FILE$SID==f])
+	RID_R1 <- paste0(RID,"*_R1_*.fastq.gz")
+	RID_R2 <- paste0(RID,"*_R2_*.fastq.gz")
+	RID_R1 <- paste0(RID_R1,collapse=" ")
+    RID_R2 <- paste0(RID_R2,collapse=" ")
+	NAME_SAMP_R1 <- paste0(FOLDER,unique(MASTER_FILE$SHORT_NAME[MASTER_FILE$SID==f]),"_R1.fastq")
+    NAME_SAMP_R2 <- paste0(FOLDER,unique(MASTER_FILE$SHORT_NAME[MASTER_FILE$SID==f]),"_R2.fastq")
+	command_R1 <- paste0("zcat ",RID_R1,Zcat_command_1,NAME_SAMP_R1)
+    command_R2 <- paste0("zcat ",RID_R2,Zcat_command_2,NAME_SAMP_R2)
+	cat(RID_R1,"\n",NAME_SAMP_R1,"\n","\n","\n")
+
+	system(command_R1, intern = FALSE,
+       ignore.stdout = FALSE, ignore.stderr = FALSE,
+       wait = TRUE, input = NULL, show.output.on.console = TRUE)
+
+    cat(RID_R2,"\n",NAME_SAMP_R2,"\n","\n","\n")
+
+    system(command_R2, intern = FALSE,
+       ignore.stdout = FALSE, ignore.stderr = FALSE,
+       wait = TRUE, input = NULL, show.output.on.console = TRUE)
+
+}
+
+
